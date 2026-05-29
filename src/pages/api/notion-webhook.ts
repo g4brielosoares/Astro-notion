@@ -3,14 +3,14 @@ import crypto from "node:crypto";
 
 export const prerender = false;
 
-const NOTION_WEBHOOK_VERIFICATION_TOKEN =
-  import.meta.env.NOTION_WEBHOOK_VERIFICATION_TOKEN || "";
+const WEBHOOK_VERIFICATION_TOKEN =
+  import.meta.env.WEBHOOK_VERIFICATION_TOKEN || "";
 
 const GITHUB_TOKEN = import.meta.env.GITHUB_TOKEN || "";
 const GITHUB_OWNER = import.meta.env.GITHUB_OWNER || "";
 const GITHUB_REPO = import.meta.env.GITHUB_REPO || "";
 const GITHUB_WORKFLOW_FILE =
-  import.meta.env.GITHUB_WORKFLOW_FILE || "deploy-cloudez.yml";
+  import.meta.env.GITHUB_WORKFLOW_FILE || "deploy.yml";
 const GITHUB_REF = import.meta.env.GITHUB_REF || "main";
 
 function json(data: unknown, status = 200) {
@@ -22,14 +22,11 @@ function json(data: unknown, status = 200) {
   });
 }
 
-function verifyNotionSignature(
-  rawBody: string,
-  incomingSignature: string | null
-) {
-  if (!incomingSignature || !NOTION_WEBHOOK_VERIFICATION_TOKEN) return false;
+function verifySignature(rawBody: string, incomingSignature: string | null) {
+  if (!incomingSignature || !WEBHOOK_VERIFICATION_TOKEN) return false;
 
   const expected = `sha256=${crypto
-    .createHmac("sha256", NOTION_WEBHOOK_VERIFICATION_TOKEN)
+    .createHmac("sha256", WEBHOOK_VERIFICATION_TOKEN)
     .update(rawBody)
     .digest("hex")}`;
 
@@ -60,12 +57,12 @@ async function triggerGithubDeploy(eventType: string) {
       Authorization: `Bearer ${GITHUB_TOKEN}`,
       "X-GitHub-Api-Version": "2022-11-28",
       "Content-Type": "application/json",
-      "User-Agent": "astro-notion-webhook",
+      "User-Agent": "node-webhook-deploy",
     },
     body: JSON.stringify({
       ref: GITHUB_REF,
       inputs: {
-        source: "notion",
+        source: "webhook",
         event_type: eventType,
       },
     }),
@@ -105,15 +102,15 @@ export const POST: APIRoute = async ({ request }) => {
     return json({
       ok: true,
       message:
-        "verification_token recebido. Salve em NOTION_WEBHOOK_VERIFICATION_TOKEN.",
+        "verification_token recebido. Salve em WEBHOOK_VERIFICATION_TOKEN.",
     });
   }
 
   const signature = request.headers.get("x-notion-signature");
 
   if (
-    NOTION_WEBHOOK_VERIFICATION_TOKEN &&
-    !verifyNotionSignature(rawBody, signature)
+    WEBHOOK_VERIFICATION_TOKEN &&
+    !verifySignature(rawBody, signature)
   ) {
     return json({ ok: false, error: "Assinatura inválida" }, 401);
   }
